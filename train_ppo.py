@@ -1,14 +1,10 @@
-
-import numpy as np
-import robosuite as suite
+import robosuite
 from robosuite.wrappers import GymWrapper
-# stable-baselines3
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-
 def train_ppo_lift():
-    env = suite.make(
+    env = robosuite.make(
         env_name="Lift",
         robots="Panda",
         has_renderer=False,
@@ -19,22 +15,12 @@ def train_ppo_lift():
         control_freq=20,
     )
 
-    # Wrap the environment
     env = GymWrapper(env)
     env = DummyVecEnv([lambda: env])
-
-    # Define the model
     model = PPO("MlpPolicy", env, verbose=1)
-
-    # Train the model
-    model.learn(total_timesteps=100000)
-
-    # Save the model
+    model.learn(total_timesteps=1_000_000)
     model.save("ppo_lift")
-
-    # Close the environment
     env.close()
-
 
 def main():
     train_ppo_lift()
