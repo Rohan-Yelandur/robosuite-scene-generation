@@ -18,8 +18,8 @@ def train_ppo_lift():
     env = GymWrapper(env)
     env = DummyVecEnv([lambda: env])
     model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=10_000)
-    model.save("./policy/ppo_lift")
+    model.learn(total_timesteps=1_000_000)
+    model.save("./policy/mlp_ppo_lift")
     env.close()
 
 def main():

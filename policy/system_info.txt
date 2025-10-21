@@ -1,9 +1,0 @@
-- OS: Linux-5.15.0-94-generic-x86_64-with-glibc2.31 # 104~20.04.1-Ubuntu SMP Tue Jan 16 13:34:09 UTC 2024
-- Python: 3.10.18
-- Stable-Baselines3: 2.7.0
-- PyTorch: 2.8.0+cu128
-- GPU Enabled: True
-- Numpy: 2.2.6
-- Cloudpickle: 3.1.1
-- Gymnasium: 1.2.1
-- OpenAI Gym: 0.26.2
