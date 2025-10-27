@@ -21,7 +21,7 @@ def visualize_ppo_lift():
     env = GymWrapper(env)
     
     # Load the trained model
-    model = PPO.load("./policy/ppo_lift", env=env)
+    model = PPO.load("./policy/mlp_ppo_lift", env=env)
     
     # Create videos directory
     output_dir = "videos"
