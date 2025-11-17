@@ -117,34 +117,6 @@ class EnvRobosuite(EB.EnvBase):
 
         kwargs = deepcopy(kwargs)
 
-        # Handle controller_configs for multi-arm robots
-        # Older checkpoints may have part controller configs that need to be converted to composite controllers
-        if "controller_configs" in kwargs and "robots" in kwargs:
-            controller_cfg = kwargs["controller_configs"]
-            robots = kwargs["robots"]
-            
-            # Check if this is a multi-arm setup and controller is in old format (part controller dict)
-            if isinstance(robots, list) and len(robots) > 1:
-                # If controller_configs is a dict with 'type' field (old part controller format)
-                if isinstance(controller_cfg, dict) and "type" in controller_cfg:
-                    composite_loader = _get_composite_controller_loader()
-                    if composite_loader is None:
-                        warnings.warn(
-                            "Unable to import robosuite composite controller loader; old multi-arm checkpoints "
-                            "may fail unless robosuite>=1.5 is installed."
-                        )
-                    else:
-                        try:
-                            # Use BASIC composite controller which wraps part controllers for each arm
-                            kwargs["controller_configs"] = composite_loader(
-                                controller="BASIC",
-                                robot=robots[0]  # Use first robot as reference
-                            )
-                        except Exception as exc:
-                            warnings.warn(
-                                f"Failed to upgrade multi-arm controller config via robosuite composite loader: {exc}"
-                            )
-
         # update kwargs based on passed arguments
         update_kwargs = dict(
             has_renderer=render,
