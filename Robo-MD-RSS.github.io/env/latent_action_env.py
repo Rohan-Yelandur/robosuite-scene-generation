@@ -45,7 +45,7 @@ class LatentActionEnv(gym.Env):
 
         # initial reset
         self.obs = self.env.reset()
-        self.is_sequence = (len(self.obs["agentview_image"].shape) == 4)
+        self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
 
     def reset(self):
         print('Resetting env')
@@ -158,7 +158,11 @@ class LatentActionEnv(gym.Env):
         if self.is_sequence:
             return self.obs["agentview_image"][0]
         
-        return self.obs["agentview_image"]
+        if "agentview_image" in self.obs:
+            return self.obs["agentview_image"]
+        else:
+            # Return a dummy observation if no image is available (for low-dim agents)
+            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
     
     def step(self, action):
         self.steps+=1
@@ -506,8 +510,12 @@ class LatentActionEnv(gym.Env):
 
         if self.is_sequence:
             return self.obs["agentview_image"][0], reward, done, {}
-            
-        return self.obs["agentview_image"], reward, done, {}
+        
+        if "agentview_image" in self.obs:
+            return self.obs["agentview_image"], reward, done, {}
+        else:
+            # Return a dummy observation if no image is available (for low-dim agents)
+            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype), reward, done, {}
         
     def save_rendered_frame(self, img_array):
         # Convert to uint8 if necessary and ensure BGR format for OpenCV

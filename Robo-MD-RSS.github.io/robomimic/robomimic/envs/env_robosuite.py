@@ -117,46 +117,33 @@ class EnvRobosuite(EB.EnvBase):
 
         kwargs = deepcopy(kwargs)
 
-        # Handle controller_configs - convert old part controller format to new composite format if needed
+        # Handle controller_configs for multi-arm robots
+        # Older checkpoints may have part controller configs that need to be converted to composite controllers
         if "controller_configs" in kwargs and "robots" in kwargs:
             controller_cfg = kwargs["controller_configs"]
             robots = kwargs["robots"]
             
-            # If controller_configs is a dict with 'type' field (old part controller format)
-            if isinstance(controller_cfg, dict) and "type" in controller_cfg:
-                try:
-                    from robosuite.controllers import load_part_controller_config
-                    # Load the arm controller - use the type from the old config
-                    controller_type = controller_cfg.get("type", "OSC_POSE")
-                    arm_config = load_part_controller_config(default_controller=controller_type)
-                    
-                    # Add gripper config nested within arm config (robosuite BASIC format)
-                    arm_config["gripper"] = {"type": "GRIP"}
-                    
-                    # Check if multi-arm or single-arm
-                    if isinstance(robots, list) and len(robots) > 1:
-                        # Multi-arm: create composite config for right and left
-                        kwargs["controller_configs"] = {
-                            "type": "BASIC",
-                            "body_parts": {
-                                "right": arm_config,
-                                "left": deepcopy(arm_config)
-                            }
-                        }
+            # Check if this is a multi-arm setup and controller is in old format (part controller dict)
+            if isinstance(robots, list) and len(robots) > 1:
+                # If controller_configs is a dict with 'type' field (old part controller format)
+                if isinstance(controller_cfg, dict) and "type" in controller_cfg:
+                    composite_loader = _get_composite_controller_loader()
+                    if composite_loader is None:
+                        warnings.warn(
+                            "Unable to import robosuite composite controller loader; old multi-arm checkpoints "
+                            "may fail unless robosuite>=1.5 is installed."
+                        )
                     else:
-                        # Single-arm: create composite config for just right arm
-                        kwargs["controller_configs"] = {
-                            "type": "BASIC",
-                            "body_parts": {
-                                "right": arm_config
-                            }
-                        }
-                except Exception as exc:
-                    # If conversion fails, remove controller_configs and let robosuite use defaults
-                    warnings.warn(
-                        f"Failed to convert controller config, using robosuite defaults: {exc}"
-                    )
-                    kwargs.pop("controller_configs", None)
+                        try:
+                            # Use BASIC composite controller which wraps part controllers for each arm
+                            kwargs["controller_configs"] = composite_loader(
+                                controller="BASIC",
+                                robot=robots[0]  # Use first robot as reference
+                            )
+                        except Exception as exc:
+                            warnings.warn(
+                                f"Failed to upgrade multi-arm controller config via robosuite composite loader: {exc}"
+                            )
 
         # update kwargs based on passed arguments
         update_kwargs = dict(
