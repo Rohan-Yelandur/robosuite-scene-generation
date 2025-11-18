@@ -42,10 +42,7 @@ class SquareEnv(gym.Env):
 
         # Initial environment reset
         self.obs = self.env.reset()
-        # Check if using image observations (agentview_image key exists)
-        if "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4: 
-            # If there's a batch dimension
-            self.is_sequence = True
+        self._update_sequence_flag()
 
     def reset(self):
         print("Resetting the environment...")
@@ -85,8 +82,9 @@ class SquareEnv(gym.Env):
         st["model"] = new_xml_str
 
         # Actually reset
-        self.obs = self.env.reset_to(st)
-        self.env.reset()
+        self.env.reset_to(st)
+        self.obs = self.env.reset()
+        self._update_sequence_flag()
 
         # If recording video, initialize the VideoWriter
         if self.video_record:
@@ -98,14 +96,7 @@ class SquareEnv(gym.Env):
             self.video_writer = cv2.VideoWriter(video_filename, fourcc, 30, (w, h))
             self._save_rendered_frame(rendered_img)
 
-        # Return observation - use image if available, otherwise create dummy image for low-dim
-        if "agentview_image" in self.obs:
-            if self.is_sequence:
-                return self.obs["agentview_image"][0]
-            return self.obs["agentview_image"]
-        else:
-            # Low-dim observation - return dummy image for PPO observation space
-            return np.zeros((3, 84, 84), dtype=np.uint8)
+        return self._extract_agentview_image(self.obs)
 
     def step(self, action):
         """
@@ -192,10 +183,12 @@ class SquareEnv(gym.Env):
                 light.set("diffuse", f"{r} {g} {b}")
         # Update model
         new_xml_str = ET.tostring(root, encoding="unicode")
-        robot_state["model"] = new_xml_str
+        rollout_state = deepcopy(robot_state)
+        rollout_state["model"] = new_xml_str
 
         # Reset the environment to the new XML
-        self.obs = self.env.reset_to(robot_state)
+        self.obs = self.env.reset_to(rollout_state)
+        self._update_sequence_flag()
 
         # If we're recording video, save the frame
         if self.video_record:
@@ -226,11 +219,11 @@ class SquareEnv(gym.Env):
                 rendered_img = self.env.render(mode="rgb_array", width=300, height=300)
                 self._save_rendered_frame(rendered_img)
 
+            self.obs = deepcopy(next_obs)
+
             # Break if done or success
             if done or success:
                 break
-
-            self.obs = deepcopy(next_obs)
 
         # Write stats
         stats = dict(Return=total_reward, Horizon=(step_i + 1), Success_Rate=float(success))
@@ -243,6 +236,8 @@ class SquareEnv(gym.Env):
             # If success, we might do some custom logic
             reward = -1
             done = False
+            self.obs = self.env.reset_to(rollout_state)
+            self._update_sequence_flag()
         else:
             reward = 1000
             print("Episode Completed")
@@ -252,14 +247,7 @@ class SquareEnv(gym.Env):
             self.video_writer.release()
             print(f"Episode {self.steps} video saved.")
 
-        # Return observation - use image if available, otherwise create dummy image for low-dim
-        if "agentview_image" in self.obs:
-            if self.is_sequence:
-                return self.obs["agentview_image"][0], reward, done, {}
-            return self.obs["agentview_image"], reward, done, {}
-        else:
-            # Low-dim observation - return dummy image for PPO observation space
-            return np.zeros((3, 84, 84), dtype=np.uint8), reward, done, {}
+        return self._extract_agentview_image(self.obs), reward, done, {}
 
 
     def _save_rendered_frame(self, img_array):
@@ -303,4 +291,38 @@ class SquareEnv(gym.Env):
                 file.write(str(stats["Success_Rate"]) + "\n")
             with open(f"square_rl_data/{self.save_path}/actions.txt", "a") as file:
                 file.write(str(action) + "\n")
+
+    def _update_sequence_flag(self):
+        """Keep track of whether image observations include a sequence dimension."""
+        self.is_sequence = False
+        if isinstance(self.obs, dict):
+            img = self.obs.get("agentview_image")
+            if isinstance(img, np.ndarray) and img.ndim == 4:
+                self.is_sequence = True
+
+    def _extract_agentview_image(self, obs):
+        """Convert agentview_image to channel-first uint8 array expected by the PPO policy."""
+        img = None
+        if isinstance(obs, dict):
+            img = obs.get("agentview_image")
+
+        if img is None:
+            return np.zeros((3, 84, 84), dtype=np.uint8)
+
+        if isinstance(img, np.ndarray) and img.ndim == 4:
+            img = img[0]
+
+        if img.ndim != 3:
+            raise ValueError(f"Unexpected agentview_image shape: {img.shape}")
+
+        if img.shape[0] != 3 and img.shape[-1] == 3:
+            img = np.transpose(img, (2, 0, 1))
+
+        if img.shape[0] != 3:
+            raise ValueError(f"agentview_image must have 3 channels, got shape {img.shape}")
+
+        if img.dtype != np.uint8:
+            img = img.astype(np.uint8)
+
+        return img
 

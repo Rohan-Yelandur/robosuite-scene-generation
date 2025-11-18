@@ -370,6 +370,45 @@ def config_from_checkpoint(algo_name=None, ckpt_path=None, ckpt_dict=None, verbo
     return config, ckpt_dict
 
 
+def _remap_legacy_visual_encoder_keys(state_dict):
+    """Remap legacy VisualCore parameter prefixes to the current module names."""
+    if not isinstance(state_dict, OrderedDict):
+        return state_dict, False
+
+    rename_pairs = (
+        (".vis_core.", ".backbone."),
+        (".visual_core.", ".backbone."),
+        (".pool_net.", ".pool."),
+    )
+
+    updated_state = OrderedDict()
+    changed = False
+
+    for key, value in state_dict.items():
+        if key.endswith("num_batches_tracked"):
+            changed = True
+            continue
+
+        new_key = key
+        for old, new in rename_pairs:
+            if old in new_key:
+                new_key = new_key.replace(old, new)
+
+        if new_key != key:
+            changed = True
+
+        if new_key in updated_state:
+            # If both legacy and updated keys somehow exist, prefer the first occurrence.
+            continue
+
+        updated_state[new_key] = value
+
+    if not changed:
+        return state_dict, False
+
+    return updated_state, True
+
+
 def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=False):
     """
     This function restores a trained policy from a checkpoint file or
@@ -431,6 +470,22 @@ def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=
         ac_dim=shape_meta["ac_dim"],
         device=device,
     )
+    # handle checkpoints saved with legacy visual encoder key prefixes
+    model_state = ckpt_dict["model"]
+    if isinstance(model_state, OrderedDict) or (isinstance(model_state, dict) and "nets" in model_state):
+        nets_state = model_state if isinstance(model_state, OrderedDict) else model_state.get("nets", OrderedDict())
+        remapped_nets_state, remapped = _remap_legacy_visual_encoder_keys(nets_state)
+        if remapped:
+            if isinstance(model_state, OrderedDict):
+                model_state = remapped_nets_state
+            else:
+                model_state = dict(model_state)
+                model_state["nets"] = remapped_nets_state
+            ckpt_dict = dict(ckpt_dict)
+            ckpt_dict["model"] = model_state
+            if verbose:
+                print("[INFO] Remapped legacy visual encoder parameters for compatibility")
+
     model.deserialize(ckpt_dict["model"])
     model.set_eval()
     model = RolloutPolicy(

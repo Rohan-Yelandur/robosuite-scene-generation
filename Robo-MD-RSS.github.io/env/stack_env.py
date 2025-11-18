@@ -42,9 +42,7 @@ class StackEnv(gym.Env):
 
         # Initial environment reset
         self.obs = self.env.reset()
-        if len(self.obs["agentview_image"].shape) == 4: 
-            # If there's a batch dimension
-            self.is_sequence = True
+        self._update_sequence_flag(self.obs)
 
     def reset(self):
         print("Resetting the environment...")
@@ -89,8 +87,9 @@ class StackEnv(gym.Env):
         st["model"] = new_xml_str
 
         # Actually reset
-        self.obs = self.env.reset_to(st)
-        self.env.reset()
+        self.env.reset_to(st)
+        self.obs = self.env.reset()
+        self._update_sequence_flag(self.obs)
 
         # If recording video, initialize the VideoWriter
         if self.video_record:
@@ -208,10 +207,11 @@ class StackEnv(gym.Env):
 
         # Update model
         new_xml_str = ET.tostring(root, encoding="unicode")
-        robot_state["model"] = new_xml_str
+        rollout_state = deepcopy(robot_state)
+        rollout_state["model"] = new_xml_str
 
         # Reset the environment to the new XML
-        self.obs = self.env.reset_to(robot_state)
+        self.obs = self.env.reset_to(rollout_state)
 
         # If we're recording video, save the frame
         if self.video_record:
@@ -242,11 +242,11 @@ class StackEnv(gym.Env):
                 rendered_img = self.env.render(mode="rgb_array", width=300, height=300)
                 self._save_rendered_frame(rendered_img)
 
+            self.obs = deepcopy(next_obs)
+
             # Break if done or success
             if done or success:
                 break
-
-            self.obs = deepcopy(next_obs)
 
         # Write stats
         stats = dict(Return=total_reward, Horizon=(step_i + 1), Success_Rate=float(success))
@@ -259,6 +259,8 @@ class StackEnv(gym.Env):
             # If success, we might do some custom logic
             reward = -1
             done = False
+            self.obs = self.env.reset_to(rollout_state)
+            self._update_sequence_flag(self.obs)
         else:
             reward = 1000
             print("Episode Completed")
@@ -271,6 +273,14 @@ class StackEnv(gym.Env):
         if self.is_sequence:
             return self.obs["agentview_image"][0], reward, done, {}
         return self.obs["agentview_image"], reward, done, {}
+
+
+    def _update_sequence_flag(self, obs):
+        """Track whether observations include a sequence dimension."""
+        img = None
+        if isinstance(obs, dict):
+            img = obs.get("agentview_image")
+        self.is_sequence = isinstance(img, np.ndarray) and img.ndim == 4
 
 
     def _save_rendered_frame(self, img_array):

@@ -137,9 +137,9 @@ class LatentActionEnv(gym.Env):
         # Update the model in the state
         st['model'] = new_xml_str
 
-        self.obs = self.env.reset_to(st)
-
-        self.env.reset() 
+        self.env.reset_to(st)
+        self.obs = self.env.reset()
+        self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
 
         if self.video_record:
             rendered_img = self.env.render(mode="rgb_array", width=300, height=300)
@@ -434,10 +434,10 @@ class LatentActionEnv(gym.Env):
         new_xml_str = ET.tostring(root, encoding='unicode')
 
         # Update the model in the state
-        robot_state['model'] = new_xml_str
+        rollout_state = deepcopy(robot_state)
+        rollout_state['model'] = new_xml_str
 
-        self.obs = self.env.reset_to(robot_state)
-        # self.env.reset()
+        self.obs = self.env.reset_to(rollout_state)
 
 
         if self.video_record:
@@ -445,7 +445,7 @@ class LatentActionEnv(gym.Env):
             self.save_rendered_frame(rendered_img)
 
         total_reward = 0.
-        traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=robot_state)
+        traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=rollout_state)
 
         for step_i in range(self.horizon):
 
@@ -476,12 +476,12 @@ class LatentActionEnv(gym.Env):
                 self.save_rendered_frame(rendered_img)
 
 
+            # update for next iter
+            self.obs = deepcopy(next_obs)
+
             # break if done or if success
             if done or success:
                 break
-
-            # update for next iter
-            self.obs = deepcopy(next_obs)
             # st = self.env.get_state()
             
         stats = dict(Return=total_reward, Horizon=(step_i + 1), Success_Rate=float(success))
@@ -497,7 +497,8 @@ class LatentActionEnv(gym.Env):
         if stats['Success_Rate'] == 1.0:
             reward = -1 * (500/stats['Horizon']) * (1000/penalty + 1) - same_action_penalty
             done = False
-            self.env.reset_to(robot_state)
+            self.obs = self.env.reset_to(rollout_state)
+            self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
         else:
             reward = 10000 / (penalty + 1) - same_action_penalty
             print('Failure Found, episode Completed\n')
