@@ -103,9 +103,22 @@ def train_embed(args):
         pin_memory=False
     )
 
-    # 3) Model, optimizer, etc.
+    # # 3) Model, optimizer, etc.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = ViTCLIPModel(checkpoint_gradient=args.checkpoint_gradient).to(device)
+
+    if args.load_checkpoint:
+        checkpoint_path = args.load_checkpoint
+        if not os.path.isabs(checkpoint_path):
+            checkpoint_path = os.path.join(os.getcwd(), checkpoint_path)
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        state_dict = checkpoint.get("model_state_dict") if isinstance(checkpoint, dict) else checkpoint
+        model.load_state_dict(state_dict)
+        print(f"Loaded checkpoint from {checkpoint_path}")
+
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
     scaler = GradScaler()
@@ -165,7 +178,9 @@ def train_embed(args):
     embeddings_list = []
     values_list = []
 
-    folder_path = args.path + "demo"
+    folder_path = os.path.join(args.path, "demo")
+    if not os.path.isdir(folder_path):
+        raise FileNotFoundError(f"Demo folder not found at {folder_path}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for folder_name in os.listdir(folder_path)[:15]:
@@ -203,6 +218,7 @@ if __name__ == "__main__":
     parser.add_argument("--path", type=str, required=True, help="Path to dataset.")
     parser.add_argument("--epochs", type=int, default=100, help="Number of epochs.")
     parser.add_argument("--checkpoint_gradient", action="store_true", help="Enable gradient checkpointing.")
+    parser.add_argument("--load_checkpoint", type=str, default=None, help="Path to a saved model checkpoint to load before embedding extraction.")
     args = parser.parse_args()
 
     train_embed(args)

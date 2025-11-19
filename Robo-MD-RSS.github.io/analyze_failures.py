@@ -25,13 +25,45 @@ def load_actions(actions_file):
         actions = [int(line.strip()) for line in f if line.strip()]
     return actions
 
-def analyze_actions(actions, task_name):
-    """Analyze action frequencies and compute probabilities"""
+def load_stats(stats_file):
+    """Load episode statistics from stats.txt and return list of success flags"""
+    successes = []
+    if not os.path.exists(stats_file):
+        print(f"Warning: stats.txt not found at {stats_file}, assuming all episodes failed")
+        return None
+    
+    with open(stats_file, 'r') as f:
+        for line in f:
+            if line.strip():
+                # Parse dict-like string: {'Return': -1.0, 'Horizon': 400, 'Success_Rate': 0.0}
+                try:
+                    stats_dict = eval(line.strip())
+                    success = stats_dict.get('Success_Rate', 0.0)
+                    successes.append(success > 0.5)  # Consider >0.5 as success
+                except:
+                    successes.append(False)
+    return successes
+
+def analyze_actions(actions, successes, task_name):
+    """Analyze action frequencies for FAILED episodes and compute probabilities"""
     action_dict = ACTION_DICTS.get(task_name, {})
     
+    # Filter to only failed episodes
+    if successes is not None:
+        failed_actions = [action for action, success in zip(actions, successes) if not success]
+        print(f"Total episodes: {len(actions)}, Failed episodes: {len(failed_actions)}")
+    else:
+        # If no stats, assume all failed
+        failed_actions = actions
+        print(f"Total episodes (assumed failures): {len(actions)}")
+    
+    if not failed_actions:
+        print("Warning: No failed episodes found!")
+        failed_actions = actions  # Fallback to all actions
+    
     # Count frequencies
-    action_counts = Counter(actions)
-    total = len(actions)
+    action_counts = Counter(failed_actions)
+    total = len(failed_actions)
     
     # Sort by frequency (descending)
     sorted_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)
@@ -146,7 +178,7 @@ def create_radar_chart(action_probs, action_dict, task_name, output_file):
     
     return fig
 
-def generate_text_report(sorted_actions, action_probs, total, action_dict, task_name, output_file):
+def generate_text_report(sorted_actions, action_probs, total, action_dict, task_name, output_file, total_episodes=None):
     """Generate detailed text report of failure analysis"""
     
     with open(output_file, 'w') as f:
@@ -155,7 +187,13 @@ def generate_text_report(sorted_actions, action_probs, total, action_dict, task_
         f.write(f"{task_name.upper()} POLICY FAILURE PROBABILITY MAP\n")
         f.write("=" * 80 + "\n\n")
         
-        f.write(f"Total episodes analyzed: {total}\n\n")
+        if total_episodes:
+            success_rate = ((total_episodes - total) / total_episodes) * 100
+            f.write(f"Total episodes analyzed: {total_episodes}\n")
+            f.write(f"Failed episodes: {total} ({100 - success_rate:.1f}%)\n")
+            f.write(f"Successful episodes: {total_episodes - total} ({success_rate:.1f}%)\n\n")
+        else:
+            f.write(f"Total failed episodes analyzed: {total}\n\n")
         
         # Ranked list
         f.write("Failure Mode Rankings (Highest to Lowest Probability):\n")
@@ -165,7 +203,7 @@ def generate_text_report(sorted_actions, action_probs, total, action_dict, task_
             probability = action_probs[action_id]
             description = action_dict.get(action_id, f"Unknown action {action_id}")
             
-            f.write(f"{rank}. Action {action_id} - {probability:.1f}% ({count}/{total} episodes)\n")
+            f.write(f"{rank}. Action {action_id} - {probability:.1f}% ({count}/{total} failures)\n")
             f.write(f"   → {description}\n\n")
         
         f.write("=" * 80 + "\n\n")
@@ -239,6 +277,8 @@ def main():
     
     # Validate inputs
     actions_file = os.path.join(args.log_dir, "actions.txt")
+    stats_file = os.path.join(args.log_dir, "stats.txt")
+    
     if not os.path.exists(actions_file):
         print(f"Error: actions.txt not found at {actions_file}")
         return
@@ -256,16 +296,21 @@ def main():
     
     os.makedirs(output_dir, exist_ok=True)
     
-    # Load and analyze actions
+    # Load actions and stats
     print(f"Loading actions from {actions_file}...")
     actions = load_actions(actions_file)
     
-    print(f"Analyzing {len(actions)} episodes...")
-    sorted_actions, action_probs, total, action_dict = analyze_actions(actions, args.task)
+    print(f"Loading stats from {stats_file}...")
+    successes = load_stats(stats_file)
+    
+    # Analyze
+    print(f"Analyzing failure modes...")
+    sorted_actions, action_probs, failed_count, action_dict = analyze_actions(actions, successes, args.task)
     
     # Generate text report
     text_output = os.path.join(output_dir, f"{args.task}_failure_summary.txt")
-    generate_text_report(sorted_actions, action_probs, total, action_dict, args.task, text_output)
+    total_episodes = len(actions) if successes else None
+    generate_text_report(sorted_actions, action_probs, failed_count, action_dict, args.task, text_output, total_episodes)
     
     # Generate radar chart
     chart_output = os.path.join(output_dir, f"{args.task}_failure_radar.png")

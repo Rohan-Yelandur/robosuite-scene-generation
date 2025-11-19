@@ -45,7 +45,7 @@ class LatentActionEnv(gym.Env):
 
         # initial reset
         self.obs = self.env.reset()
-        self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
+        self._update_sequence_flag()
 
     def reset(self):
         print('Resetting env')
@@ -139,7 +139,7 @@ class LatentActionEnv(gym.Env):
 
         self.env.reset_to(st)
         self.obs = self.env.reset()
-        self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
+        self._update_sequence_flag()
 
         if self.video_record:
             rendered_img = self.env.render(mode="rgb_array", width=300, height=300)
@@ -155,14 +155,7 @@ class LatentActionEnv(gym.Env):
             )
 
         self.policy.start_episode()
-        if self.is_sequence:
-            return self.obs["agentview_image"][0]
-        
-        if "agentview_image" in self.obs:
-            return self.obs["agentview_image"]
-        else:
-            # Return a dummy observation if no image is available (for low-dim agents)
-            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+        return self._extract_agentview_image(self.obs)
     
     def step(self, action):
         self.steps+=1
@@ -438,6 +431,9 @@ class LatentActionEnv(gym.Env):
         rollout_state['model'] = new_xml_str
 
         self.obs = self.env.reset_to(rollout_state)
+        if self.obs is None:
+            self.obs = self.env.reset()
+        self._update_sequence_flag()
 
 
         if self.video_record:
@@ -478,6 +474,7 @@ class LatentActionEnv(gym.Env):
 
             # update for next iter
             self.obs = deepcopy(next_obs)
+            self._update_sequence_flag()
 
             # break if done or if success
             if done or success:
@@ -498,7 +495,9 @@ class LatentActionEnv(gym.Env):
             reward = -1 * (500/stats['Horizon']) * (1000/penalty + 1) - same_action_penalty
             done = False
             self.obs = self.env.reset_to(rollout_state)
-            self.is_sequence = "agentview_image" in self.obs and len(self.obs["agentview_image"].shape) == 4
+            if self.obs is None:
+                self.obs = self.env.reset()
+            self._update_sequence_flag()
         else:
             reward = 10000 / (penalty + 1) - same_action_penalty
             print('Failure Found, episode Completed\n')
@@ -509,14 +508,7 @@ class LatentActionEnv(gym.Env):
         
         print(f"Steps : {self.steps}")
 
-        if self.is_sequence:
-            return self.obs["agentview_image"][0], reward, done, {}
-        
-        if "agentview_image" in self.obs:
-            return self.obs["agentview_image"], reward, done, {}
-        else:
-            # Return a dummy observation if no image is available (for low-dim agents)
-            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype), reward, done, {}
+        return self._extract_agentview_image(self.obs), reward, done, {}
         
     def save_rendered_frame(self, img_array):
         # Convert to uint8 if necessary and ensure BGR format for OpenCV
@@ -528,3 +520,37 @@ class LatentActionEnv(gym.Env):
 
         # Write the rendered frame to the video
         self.video_writer.write(img_bgr)
+
+    def _update_sequence_flag(self):
+        """Keep track of whether the current observation carries a sequence dimension."""
+        self.is_sequence = False
+        if isinstance(self.obs, dict):
+            img = self.obs.get("agentview_image")
+            if isinstance(img, np.ndarray) and img.ndim == 4:
+                self.is_sequence = True
+
+    def _extract_agentview_image(self, obs):
+        """Return agentview image as channel-first uint8 array for PPO."""
+        img = None
+        if isinstance(obs, dict):
+            img = obs.get("agentview_image")
+
+        if img is None:
+            return np.zeros((3, 84, 84), dtype=np.uint8)
+
+        if isinstance(img, np.ndarray) and img.ndim == 4:
+            img = img[0]
+
+        if not isinstance(img, np.ndarray) or img.ndim != 3:
+            raise ValueError(f"Unexpected agentview_image shape: {getattr(img, 'shape', None)}")
+
+        if img.shape[0] != 3 and img.shape[-1] == 3:
+            img = np.transpose(img, (2, 0, 1))
+
+        if img.shape[0] != 3:
+            raise ValueError(f"agentview_image must have 3 channels, got shape {img.shape}")
+
+        if img.dtype != np.uint8:
+            img = img.astype(np.uint8)
+
+        return img

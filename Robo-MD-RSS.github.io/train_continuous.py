@@ -36,6 +36,16 @@ def train_ppo(run_name, task_name, agent_path, rl_timesteps):
     )
     config, _ = FileUtils.config_from_checkpoint(ckpt_dict=ckpt_dict)
     horizon = config.experiment.rollout.horizon
+
+    # Fix old controller configs that are incompatible with newer robosuite
+    if 'env_metadata' in ckpt_dict and 'env_kwargs' in ckpt_dict['env_metadata']:
+        env_kwargs = ckpt_dict['env_metadata']['env_kwargs']
+        if 'controller_configs' in env_kwargs:
+            ctrl = env_kwargs['controller_configs']
+            if isinstance(ctrl, dict) and 'type' in ctrl and 'body_parts' not in ctrl:
+                # Old format - remove it to use defaults
+                del ckpt_dict['env_metadata']['env_kwargs']['controller_configs']
+                print("[INFO] Removed incompatible old controller config, using defaults")
     print(f"Horizon from config: {horizon}")
 
     # (B) Create environment from checkpoint
@@ -48,7 +58,7 @@ def train_ppo(run_name, task_name, agent_path, rl_timesteps):
     )
 
     # (C) Load known embeddings
-    embed_file = os.path.join(run_name, "known_embed_train.h5")
+    embed_file = os.path.join(".", "known_embeddings.h5")
     if not os.path.isfile(embed_file):
         raise FileNotFoundError(f"Embedding file not found: {embed_file}")
 

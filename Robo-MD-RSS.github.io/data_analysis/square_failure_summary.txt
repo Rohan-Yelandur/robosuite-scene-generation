@@ -1,0 +1,113 @@
+================================================================================
+SQUARE POLICY FAILURE PROBABILITY MAP
+================================================================================
+
+Total failed episodes analyzed: 300
+
+Failure Mode Rankings (Highest to Lowest Probability):
+--------------------------------------------------------------------------------
+
+1. Action 15 - 7.3% (22/300 failures)
+   → Change the robot color to green.
+
+2. Action 6 - 7.3% (22/300 failures)
+   → Resize the cylinder to dimensions 0.02 0.13 (Height, Radius).
+
+3. Action 2 - 6.7% (20/300 failures)
+   → Change the cylinder color to blue.
+
+4. Action 7 - 6.7% (20/300 failures)
+   → Resize the cylinder to dimensions 0.03 0.08 (Height, Radius).
+
+5. Action 5 - 6.3% (19/300 failures)
+   → Resize the cylinder to dimensions 0.02 0.15 (Height, Radius).
+
+6. Action 10 - 6.0% (18/300 failures)
+   → Change the lighting color to red.
+
+7. Action 16 - 5.7% (17/300 failures)
+   → Change the robot color to blue.
+
+8. Action 11 - 5.7% (17/300 failures)
+   → Change the lighting color to green.
+
+9. Action 12 - 5.7% (17/300 failures)
+   → Change the lighting color to blue.
+
+10. Action 18 - 5.3% (16/300 failures)
+   → No perturbation applied.
+
+11. Action 13 - 5.3% (16/300 failures)
+   → Change the lighting color to gray.
+
+12. Action 17 - 5.0% (15/300 failures)
+   → Change the robot color to gray.
+
+13. Action 0 - 4.3% (13/300 failures)
+   → Change the cylinder color to red.
+
+14. Action 3 - 4.3% (13/300 failures)
+   → Change the cylinder color to gray.
+
+15. Action 9 - 4.3% (13/300 failures)
+   → Resize the box to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).
+
+16. Action 1 - 4.3% (13/300 failures)
+   → Change the cylinder color to green.
+
+17. Action 4 - 3.7% (11/300 failures)
+   → Resize the cylinder to dimensions 0.03 0.1 (Height, Radius).
+
+18. Action 14 - 3.3% (10/300 failures)
+   → Change the robot color to red.
+
+19. Action 8 - 2.7% (8/300 failures)
+   → Resize the box to dimensions 0.8 0.2 0.025 (Length, Breadth, Height).
+
+================================================================================
+
+KEY INSIGHTS:
+================================================================================
+
+🟢 MINOR VULNERABILITIES (<10% failure probability):
+   • Change the robot color to green. (7.3%)
+   • Resize the cylinder to dimensions 0.02 0.13 (Height, Radius). (7.3%)
+   • Change the cylinder color to blue. (6.7%)
+   • Resize the cylinder to dimensions 0.03 0.08 (Height, Radius). (6.7%)
+   • Resize the cylinder to dimensions 0.02 0.15 (Height, Radius). (6.3%)
+   • Change the lighting color to red. (6.0%)
+   • Change the robot color to blue. (5.7%)
+   • Change the lighting color to green. (5.7%)
+   • Change the lighting color to blue. (5.7%)
+   • No perturbation applied. (5.3%)
+   • Change the lighting color to gray. (5.3%)
+   • Change the robot color to gray. (5.0%)
+   • Change the cylinder color to red. (4.3%)
+   • Change the cylinder color to gray. (4.3%)
+   • Resize the box to dimensions 0.2 0.8 0.025 (Length, Breadth, Height). (4.3%)
+   • Change the cylinder color to green. (4.3%)
+   • Resize the cylinder to dimensions 0.03 0.1 (Height, Radius). (3.7%)
+   • Change the robot color to red. (3.3%)
+   • Resize the box to dimensions 0.8 0.2 0.025 (Length, Breadth, Height). (2.7%)
+
+================================================================================
+RECOMMENDATIONS FOR POLICY IMPROVEMENT:
+================================================================================
+
+1. DOMAIN RANDOMIZATION:
+   Focus training data augmentation on the top 3 failure modes.
+
+2. TARGETED DATA COLLECTION:
+   Collect additional demonstrations under critical failure conditions.
+
+3. FINE-TUNING:
+   Fine-tune the policy specifically on scenarios involving:
+      1) Change the robot color to green.
+      2) Resize the cylinder to dimensions 0.02 0.13 (Height, Radius).
+      3) Change the cylinder color to blue.
+
+4. RE-EVALUATION:
+   After retraining, run RoboMD again to verify failure modes are reduced.
+   Success = more uniform probability distribution across all actions.
+
+================================================================================
