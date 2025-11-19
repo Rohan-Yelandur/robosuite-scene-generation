@@ -69,7 +69,7 @@ Failure Mode Rankings (Highest to Lowest Probability):
 KEY INSIGHTS:
 ================================================================================
 
-🟢 MINOR VULNERABILITIES (<10% failure probability):
+MINOR VULNERABILITIES (<10% failure probability):
    • Change the robot color to green. (7.3%)
    • Resize the cylinder to dimensions 0.02 0.13 (Height, Radius). (7.3%)
    • Change the cylinder color to blue. (6.7%)

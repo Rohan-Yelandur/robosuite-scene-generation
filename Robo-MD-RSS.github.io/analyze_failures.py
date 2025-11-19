@@ -45,8 +45,11 @@ def load_stats(stats_file):
     return successes
 
 def analyze_actions(actions, successes, task_name):
-    """Analyze action frequencies for FAILED episodes and compute probabilities"""
+    """Analyze failure rate per action (failures / total times action was used)"""
     action_dict = ACTION_DICTS.get(task_name, {})
+    
+    # Count total occurrences of each action
+    total_action_counts = Counter(actions)
     
     # Filter to only failed episodes
     if successes is not None:
@@ -61,17 +64,32 @@ def analyze_actions(actions, successes, task_name):
         print("Warning: No failed episodes found!")
         failed_actions = actions  # Fallback to all actions
     
-    # Count frequencies
-    action_counts = Counter(failed_actions)
-    total = len(failed_actions)
+    # Count failures per action
+    failed_action_counts = Counter(failed_actions)
+    total_failures = len(failed_actions)
     
-    # Sort by frequency (descending)
-    sorted_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)
+    # Compute failure rate for each action: (failures / total times used) * 100
+    action_failure_rates = {}
+    for action in total_action_counts.keys():
+        failures = failed_action_counts.get(action, 0)
+        total_uses = total_action_counts[action]
+        failure_rate = (failures / total_uses) * 100
+        action_failure_rates[action] = failure_rate
     
-    # Compute probabilities
-    action_probs = {action: (count / total) * 100 for action, count in sorted_actions}
+    # Sort by failure rate (descending)
+    sorted_actions = sorted(action_failure_rates.items(), key=lambda x: x[1], reverse=True)
     
-    return sorted_actions, action_probs, total, action_dict
+    # Create stats dict with both failure rate and counts for reporting
+    action_stats = {
+        action: {
+            'failure_rate': failure_rate,
+            'failures': failed_action_counts.get(action, 0),
+            'total_uses': total_action_counts[action]
+        }
+        for action, failure_rate in sorted_actions
+    }
+    
+    return sorted_actions, action_failure_rates, total_failures, action_dict, action_stats
 
 def create_short_labels(action_dict, action_list):
     """Create concise labels for radar chart"""
@@ -162,12 +180,12 @@ def create_radar_chart(action_probs, action_dict, task_name, output_file):
     ax.grid(True, linestyle='--', alpha=0.7)
     
     # Add title
-    ax.set_title(f'{task_name.upper()} Policy Failure Modes', 
+    ax.set_title(f'{task_name.upper()} Policy Failure Rates', 
                  size=16, weight='bold', pad=20)
     
     # Add value labels on the plot
     for angle, value, category in zip(angles[:-1], values[:-1], categories[:-1]):
-        if value > 5:  # Only label significant values
+        if value > 10:  # Only label significant values (>10% failure rate)
             ax.text(angle, value + max(values) * 0.05, f'{value:.1f}%', 
                    ha='center', va='center', size=9, weight='bold')
     
@@ -178,89 +196,43 @@ def create_radar_chart(action_probs, action_dict, task_name, output_file):
     
     return fig
 
-def generate_text_report(sorted_actions, action_probs, total, action_dict, task_name, output_file, total_episodes=None):
+def generate_text_report(sorted_actions, action_failure_rates, total_failures, action_dict, task_name, output_file, total_episodes=None, action_stats=None):
     """Generate detailed text report of failure analysis"""
     
     with open(output_file, 'w') as f:
         # Header
         f.write("=" * 80 + "\n")
-        f.write(f"{task_name.upper()} POLICY FAILURE PROBABILITY MAP\n")
+        f.write(f"{task_name.upper()} POLICY FAILURE RATE ANALYSIS\n")
         f.write("=" * 80 + "\n\n")
         
         if total_episodes:
-            success_rate = ((total_episodes - total) / total_episodes) * 100
+            success_rate = ((total_episodes - total_failures) / total_episodes) * 100
             f.write(f"Total episodes analyzed: {total_episodes}\n")
-            f.write(f"Failed episodes: {total} ({100 - success_rate:.1f}%)\n")
-            f.write(f"Successful episodes: {total_episodes - total} ({success_rate:.1f}%)\n\n")
+            f.write(f"Failed episodes: {total_failures} ({100 - success_rate:.1f}%)\n")
+            f.write(f"Successful episodes: {total_episodes - total_failures} ({success_rate:.1f}%)\n\n")
         else:
-            f.write(f"Total failed episodes analyzed: {total}\n\n")
+            f.write(f"Total failed episodes analyzed: {total_failures}\n\n")
         
         # Ranked list
-        f.write("Failure Mode Rankings (Highest to Lowest Probability):\n")
+        f.write("Failure Rate Rankings (Highest to Lowest):\n")
         f.write("-" * 80 + "\n\n")
         
-        for rank, (action_id, count) in enumerate(sorted_actions, 1):
-            probability = action_probs[action_id]
+        for rank, (action_id, failure_rate) in enumerate(sorted_actions, 1):
             description = action_dict.get(action_id, f"Unknown action {action_id}")
             
-            f.write(f"{rank}. Action {action_id} - {probability:.1f}% ({count}/{total} failures)\n")
+            if action_stats and action_id in action_stats:
+                stats = action_stats[action_id]
+                failures = stats['failures']
+                total_uses = stats['total_uses']
+                f.write(f"{rank}. Action {action_id} - {failure_rate:.1f}% failure rate ({failures}/{total_uses} uses)\n")
+            else:
+                f.write(f"{rank}. Action {action_id} - {failure_rate:.1f}% failure rate\n")
+            
             f.write(f"   → {description}\n\n")
         
         f.write("=" * 80 + "\n\n")
         
-        # Key insights section
-        f.write("KEY INSIGHTS:\n")
-        f.write("=" * 80 + "\n\n")
-        
-        # Categorize vulnerabilities
-        critical = [(aid, prob) for aid, prob in action_probs.items() if prob >= 30]
-        moderate = [(aid, prob) for aid, prob in action_probs.items() if 10 <= prob < 30]
-        minor = [(aid, prob) for aid, prob in action_probs.items() if prob < 10]
-        
-        if critical:
-            f.write("🔴 CRITICAL VULNERABILITIES (≥30% failure probability):\n")
-            for action_id, prob in critical:
-                desc = action_dict.get(action_id, f"Action {action_id}")
-                f.write(f"   • {desc} ({prob:.1f}%)\n")
-            f.write("\n")
-        
-        if moderate:
-            f.write("🟡 MODERATE VULNERABILITIES (10-30% failure probability):\n")
-            for action_id, prob in moderate:
-                desc = action_dict.get(action_id, f"Action {action_id}")
-                f.write(f"   • {desc} ({prob:.1f}%)\n")
-            f.write("\n")
-        
-        if minor:
-            f.write("🟢 MINOR VULNERABILITIES (<10% failure probability):\n")
-            for action_id, prob in minor:
-                desc = action_dict.get(action_id, f"Action {action_id}")
-                f.write(f"   • {desc} ({prob:.1f}%)\n")
-            f.write("\n")
-        
-        # Recommendations
-        f.write("=" * 80 + "\n")
-        f.write("RECOMMENDATIONS FOR POLICY IMPROVEMENT:\n")
-        f.write("=" * 80 + "\n\n")
-        
-        f.write("1. DOMAIN RANDOMIZATION:\n")
-        f.write("   Focus training data augmentation on the top 3 failure modes.\n\n")
-        
-        f.write("2. TARGETED DATA COLLECTION:\n")
-        f.write("   Collect additional demonstrations under critical failure conditions.\n\n")
-        
-        f.write("3. FINE-TUNING:\n")
-        f.write("   Fine-tune the policy specifically on scenarios involving:\n")
-        for i, (action_id, prob) in enumerate(list(action_probs.items())[:3], 1):
-            desc = action_dict.get(action_id, f"Action {action_id}")
-            f.write(f"      {i}) {desc}\n")
-        f.write("\n")
-        
-        f.write("4. RE-EVALUATION:\n")
-        f.write("   After retraining, run RoboMD again to verify failure modes are reduced.\n")
-        f.write("   Success = more uniform probability distribution across all actions.\n\n")
-        
-        f.write("=" * 80 + "\n")
+
     
     print(f"Text report saved to: {output_file}")
 
@@ -305,16 +277,16 @@ def main():
     
     # Analyze
     print(f"Analyzing failure modes...")
-    sorted_actions, action_probs, failed_count, action_dict = analyze_actions(actions, successes, args.task)
+    sorted_actions, action_failure_rates, failed_count, action_dict, action_stats = analyze_actions(actions, successes, args.task)
     
     # Generate text report
     text_output = os.path.join(output_dir, f"{args.task}_failure_summary.txt")
     total_episodes = len(actions) if successes else None
-    generate_text_report(sorted_actions, action_probs, failed_count, action_dict, args.task, text_output, total_episodes)
+    generate_text_report(sorted_actions, action_failure_rates, failed_count, action_dict, args.task, text_output, total_episodes, action_stats)
     
     # Generate radar chart
     chart_output = os.path.join(output_dir, f"{args.task}_failure_radar.png")
-    create_radar_chart(action_probs, action_dict, args.task, chart_output)
+    create_radar_chart(action_failure_rates, action_dict, args.task, chart_output)
     
     print(f"\nAnalysis complete!")
     print(f"  Text report: {text_output}")

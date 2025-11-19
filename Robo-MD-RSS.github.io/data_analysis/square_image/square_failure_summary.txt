@@ -1,0 +1,85 @@
+================================================================================
+SQUARE POLICY FAILURE RATE ANALYSIS
+================================================================================
+
+Total episodes analyzed: 3000
+Failed episodes: 1503 (50.1%)
+Successful episodes: 1497 (49.9%)
+
+Failure Rate Rankings (Highest to Lowest):
+--------------------------------------------------------------------------------
+
+1. Action 9 - 100.0% failure rate (48/48 uses)
+   → Resize the box to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).
+
+2. Action 10 - 100.0% failure rate (758/758 uses)
+   → Change the lighting color to red.
+
+3. Action 11 - 100.0% failure rate (450/450 uses)
+   → Change the lighting color to green.
+
+4. Action 16 - 27.0% failure rate (24/89 uses)
+   → Change the robot color to blue.
+
+5. Action 5 - 25.8% failure rate (17/66 uses)
+   → Resize the cylinder to dimensions 0.02 0.15 (Height, Radius).
+
+6. Action 6 - 20.0% failure rate (1/5 uses)
+   → Resize the cylinder to dimensions 0.02 0.13 (Height, Radius).
+
+7. Action 0 - 17.5% failure rate (50/286 uses)
+   → Change the cylinder color to red.
+
+8. Action 4 - 12.5% failure rate (12/96 uses)
+   → Resize the cylinder to dimensions 0.03 0.1 (Height, Radius).
+
+9. Action 1 - 12.0% failure rate (143/1189 uses)
+   → Change the cylinder color to green.
+
+10. Action 15 - 0.0% failure rate (0/12 uses)
+   → Change the robot color to green.
+
+11. Action 13 - 0.0% failure rate (0/1 uses)
+   → Change the lighting color to gray.
+
+================================================================================
+
+KEY INSIGHTS:
+================================================================================
+
+🔴 CRITICAL VULNERABILITIES (≥70% failure rate):
+   • Resize the box to dimensions 0.2 0.8 0.025 (Length, Breadth, Height). (100.0% - 48/48 uses)
+   • Change the lighting color to red. (100.0% - 758/758 uses)
+   • Change the lighting color to green. (100.0% - 450/450 uses)
+
+🟢 MINOR VULNERABILITIES (<40% failure rate):
+   • Change the cylinder color to green. (12.0% - 143/1189 uses)
+   • Resize the cylinder to dimensions 0.02 0.15 (Height, Radius). (25.8% - 17/66 uses)
+   • Change the robot color to blue. (27.0% - 24/89 uses)
+   • Resize the cylinder to dimensions 0.03 0.1 (Height, Radius). (12.5% - 12/96 uses)
+   • Resize the cylinder to dimensions 0.02 0.13 (Height, Radius). (20.0% - 1/5 uses)
+   • Change the robot color to green. (0.0% - 0/12 uses)
+   • Change the cylinder color to red. (17.5% - 50/286 uses)
+   • Change the lighting color to gray. (0.0% - 0/1 uses)
+
+================================================================================
+RECOMMENDATIONS FOR POLICY IMPROVEMENT:
+================================================================================
+
+1. DOMAIN RANDOMIZATION:
+   Focus training data augmentation on the top 3 failure modes.
+
+2. TARGETED DATA COLLECTION:
+   Collect additional demonstrations under critical failure conditions.
+
+3. FINE-TUNING:
+   Fine-tune the policy specifically on scenarios involving:
+      1) Resize the box to dimensions 0.2 0.8 0.025 (Length, Breadth, Height). (100.0% failure rate)
+      2) Change the lighting color to red. (100.0% failure rate)
+      3) Change the lighting color to green. (100.0% failure rate)
+
+4. RE-EVALUATION:
+   After retraining, run RoboMD again to verify failure modes are reduced.
+   Success = more uniform probability distribution across all actions.
+
+================================================================================
