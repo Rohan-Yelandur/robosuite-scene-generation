@@ -1,0 +1,109 @@
+================================================================================
+LIFT POLICY ANALYSIS - DISCRETE MODE
+================================================================================
+
+Overall Statistics:
+--------------------------------------------------------------------------------
+Total episodes: 300
+Successful episodes: 137 (45.7%)
+Failed episodes: 163 (54.3%)
+
+Per-Action Analysis:
+================================================================================
+
+1. Action 4
+   Success Rate: 0.0% (0/26 episodes)
+   Failure Rate: 100.0% (26/26 episodes)
+   → Change the table color to green
+
+2. Action 5
+   Success Rate: 0.0% (0/16 episodes)
+   Failure Rate: 100.0% (16/16 episodes)
+   → Change the table color to blue
+
+3. Action 10
+   Success Rate: 0.0% (0/12 episodes)
+   Failure Rate: 100.0% (12/12 episodes)
+   → Resize the cube to dimensions 0.04 0.04 0.04 (Length, Breadth, Height).
+
+4. Action 11
+   Success Rate: 0.0% (0/17 episodes)
+   Failure Rate: 100.0% (17/17 episodes)
+   → Resize the cube to dimensions 0.01 0.01 0.01 (Length, Breadth, Height).
+
+5. Action 17
+   Success Rate: 0.0% (0/16 episodes)
+   Failure Rate: 100.0% (16/16 episodes)
+   → Change the lighting color to red.
+
+6. Action 18
+   Success Rate: 0.0% (0/8 episodes)
+   Failure Rate: 100.0% (8/8 episodes)
+   → Change the lighting color to green.
+
+7. Action 12
+   Success Rate: 8.7% (2/23 episodes)
+   Failure Rate: 91.3% (21/23 episodes)
+   → Resize the cube to dimensions 0.04 0.01 0.01 (Length, Breadth, Height).
+
+8. Action 6
+   Success Rate: 9.1% (1/11 episodes)
+   Failure Rate: 90.9% (10/11 episodes)
+   → Change the table color to red
+
+9. Action 7
+   Success Rate: 57.9% (11/19 episodes)
+   Failure Rate: 42.1% (8/19 episodes)
+   → Change the table color to gray
+
+10. Action 2
+   Success Rate: 60.0% (9/15 episodes)
+   Failure Rate: 40.0% (6/15 episodes)
+   → Change the cube color to blue
+
+11. Action 1
+   Success Rate: 65.0% (13/20 episodes)
+   Failure Rate: 35.0% (7/20 episodes)
+   → Change the cube color to green
+
+12. Action 13
+   Success Rate: 72.7% (16/22 episodes)
+   Failure Rate: 27.3% (6/22 episodes)
+   → Change the robot color to red.
+
+13. Action 16
+   Success Rate: 80.0% (4/5 episodes)
+   Failure Rate: 20.0% (1/5 episodes)
+   → Change the robot color to gray.
+
+14. Action 0
+   Success Rate: 84.6% (11/13 episodes)
+   Failure Rate: 15.4% (2/13 episodes)
+   → Change the cube color to red
+
+15. Action 8
+   Success Rate: 85.0% (17/20 episodes)
+   Failure Rate: 15.0% (3/20 episodes)
+   → Resize the table to dimensions 0.8 0.2 0.025 (Length, Breadth, Height).
+
+16. Action 9
+   Success Rate: 86.7% (13/15 episodes)
+   Failure Rate: 13.3% (2/15 episodes)
+   → Resize the table to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).
+
+17. Action 15
+   Success Rate: 92.3% (12/13 episodes)
+   Failure Rate: 7.7% (1/13 episodes)
+   → Change the robot color to cyan.
+
+18. Action 3
+   Success Rate: 93.8% (15/16 episodes)
+   Failure Rate: 6.2% (1/16 episodes)
+   → Change the cubr color to gray
+
+19. Action 14
+   Success Rate: 100.0% (13/13 episodes)
+   Failure Rate: 0.0% (0/13 episodes)
+   → Change the robot color to green.
+
+================================================================================

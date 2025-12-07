@@ -1,0 +1,68 @@
+================================================================================
+LIFT POLICY FAILURE RATE ANALYSIS
+================================================================================
+
+Total failed episodes analyzed: 300
+
+Failure Rate Rankings (Highest to Lowest):
+--------------------------------------------------------------------------------
+
+1. Action 15 - 100.0% failure rate (13/13 uses)
+   → Change the robot color to cyan.
+
+2. Action 2 - 100.0% failure rate (15/15 uses)
+   → Change the cube color to blue
+
+3. Action 7 - 100.0% failure rate (19/19 uses)
+   → Change the table color to gray
+
+4. Action 12 - 100.0% failure rate (23/23 uses)
+   → Resize the cube to dimensions 0.04 0.01 0.01 (Length, Breadth, Height).
+
+5. Action 9 - 100.0% failure rate (15/15 uses)
+   → Resize the table to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).
+
+6. Action 17 - 100.0% failure rate (16/16 uses)
+   → Change the lighting color to red.
+
+7. Action 13 - 100.0% failure rate (22/22 uses)
+   → Change the robot color to red.
+
+8. Action 4 - 100.0% failure rate (26/26 uses)
+   → Change the table color to green
+
+9. Action 11 - 100.0% failure rate (17/17 uses)
+   → Resize the cube to dimensions 0.01 0.01 0.01 (Length, Breadth, Height).
+
+10. Action 1 - 100.0% failure rate (20/20 uses)
+   → Change the cube color to green
+
+11. Action 14 - 100.0% failure rate (13/13 uses)
+   → Change the robot color to green.
+
+12. Action 0 - 100.0% failure rate (13/13 uses)
+   → Change the cube color to red
+
+13. Action 16 - 100.0% failure rate (5/5 uses)
+   → Change the robot color to gray.
+
+14. Action 8 - 100.0% failure rate (20/20 uses)
+   → Resize the table to dimensions 0.8 0.2 0.025 (Length, Breadth, Height).
+
+15. Action 5 - 100.0% failure rate (16/16 uses)
+   → Change the table color to blue
+
+16. Action 3 - 100.0% failure rate (16/16 uses)
+   → Change the cubr color to gray
+
+17. Action 10 - 100.0% failure rate (12/12 uses)
+   → Resize the cube to dimensions 0.04 0.04 0.04 (Length, Breadth, Height).
+
+18. Action 18 - 100.0% failure rate (8/8 uses)
+   → Change the lighting color to green.
+
+19. Action 6 - 100.0% failure rate (11/11 uses)
+   → Change the table color to red
+
+================================================================================
+

@@ -28,10 +28,12 @@ class LiftEnv(gym.Env):
         # Action space: discrete with 19 possible actions
         self.action_space = gym.spaces.Discrete(19)
 
-        # Observation space: simple 3 x 84 x 84 image
-        # (You Lift adjust this to match your actual environment)
+        # Observation space: image returned by robosuite comes channel-last (HWC).
+        # Stable-Baselines3 will internally transpose to CHW, so keep the space
+        # channel-last to match the raw observation shape and avoid buffer shape
+        # mismatches in DummyVecEnv.
         self.observation_space = gym.spaces.Box(
-            low=0, high=255, shape=(3, 84, 84), dtype=np.uint8
+            low=0, high=255, shape=(84, 84, 3), dtype=np.uint8
         )
 
         # Internal trackers
@@ -102,10 +104,7 @@ class LiftEnv(gym.Env):
             self.video_writer = cv2.VideoWriter(video_filename, fourcc, 30, (w, h))
             self._save_rendered_frame(rendered_img)
 
-        if self.is_sequence:
-            return self.obs["agentview_image"][0]
-
-        return self.obs["agentview_image"]
+        return self._extract_image_obs()
 
     def step(self, action):
         """
@@ -271,9 +270,7 @@ class LiftEnv(gym.Env):
             self.video_writer.release()
             print(f"Episode {self.steps} video saved.")
 
-        if self.is_sequence:
-            return self.obs["agentview_image"][0], reward, done, {}
-        return self.obs["agentview_image"], reward, done, {}
+        return self._extract_image_obs(), reward, done, {}
 
 
     def _update_sequence_flag(self, obs):
@@ -282,6 +279,29 @@ class LiftEnv(gym.Env):
         if isinstance(obs, dict):
             img = obs.get("agentview_image")
         self.is_sequence = isinstance(img, np.ndarray) and img.ndim == 4
+
+    def _extract_image_obs(self):
+        """
+        Return agentview image in HWC uint8 format to match observation_space.
+        Handles both single images (HWC) and sequences (THWC).
+        """
+        img = self.obs.get("agentview_image") if isinstance(self.obs, dict) else None
+        if img is None:
+            return np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+
+        if img.ndim == 4:
+            img = img[0]
+
+        # Ensure dtype and bounds match observation_space expectations.
+        if img.dtype != np.uint8:
+            img = np.clip(img, 0.0, 255.0)
+            img = img.astype(np.uint8)
+
+        # If source comes channel-first, swap to HWC.
+        if img.shape == (3, 84, 84):
+            img = np.transpose(img, (1, 2, 0))
+
+        return img
 
 
     def _save_rendered_frame(self, img_array):

@@ -1,0 +1,74 @@
+================================================================================
+LIFT POLICY ANALYSIS - CONTINUOUS MODE
+================================================================================
+
+Overall Statistics:
+--------------------------------------------------------------------------------
+Total episodes: 3000
+Successful episodes: 1810 (60.3%)
+Failed episodes: 1190 (39.7%)
+
+Per-Action Analysis:
+================================================================================
+
+1. Action 12
+   Success Rate: 7.5% (8/107 episodes)
+   Failure Rate: 92.5% (99/107 episodes)
+   → Resize the cube to dimensions 0.04 0.01 0.01 (Length, Breadth, Height).
+
+2. Action 6
+   Success Rate: 9.7% (7/72 episodes)
+   Failure Rate: 90.3% (65/72 episodes)
+   → Change the table color to red
+
+3. Action 7
+   Success Rate: 56.0% (917/1637 episodes)
+   Failure Rate: 44.0% (720/1637 episodes)
+   → Change the table color to gray
+
+4. Action 0
+   Success Rate: 62.5% (5/8 episodes)
+   Failure Rate: 37.5% (3/8 episodes)
+   → Change the cube color to red
+
+5. Action 8
+   Success Rate: 65.4% (51/78 episodes)
+   Failure Rate: 34.6% (27/78 episodes)
+   → Resize the table to dimensions 0.8 0.2 0.025 (Length, Breadth, Height).
+
+6. Action 2
+   Success Rate: 66.8% (135/202 episodes)
+   Failure Rate: 33.2% (67/202 episodes)
+   → Change the cube color to blue
+
+7. Action 1
+   Success Rate: 67.1% (210/313 episodes)
+   Failure Rate: 32.9% (103/313 episodes)
+   → Change the cube color to green
+
+8. Action 13
+   Success Rate: 77.6% (170/219 episodes)
+   Failure Rate: 22.4% (49/219 episodes)
+   → Change the robot color to red.
+
+9. Action 15
+   Success Rate: 83.3% (5/6 episodes)
+   Failure Rate: 16.7% (1/6 episodes)
+   → Change the robot color to cyan.
+
+10. Action 9
+   Success Rate: 84.1% (276/328 episodes)
+   Failure Rate: 15.9% (52/328 episodes)
+   → Resize the table to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).
+
+11. Action 3
+   Success Rate: 85.7% (18/21 episodes)
+   Failure Rate: 14.3% (3/21 episodes)
+   → Change the cubr color to gray
+
+12. Action 16
+   Success Rate: 88.9% (8/9 episodes)
+   Failure Rate: 11.1% (1/9 episodes)
+   → Change the robot color to gray.
+
+================================================================================

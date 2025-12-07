@@ -183,7 +183,7 @@ def train_embed(args):
         raise FileNotFoundError(f"Demo folder not found at {folder_path}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    for folder_name in os.listdir(folder_path)[:15]:
+    for folder_name in sorted(os.listdir(folder_path)):
         print(folder_name)
         sub_folder = os.path.join(folder_path, folder_name)
         

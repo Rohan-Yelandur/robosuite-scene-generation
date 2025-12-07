@@ -2,10 +2,7 @@ import os
 import argparse
 import torch
 import numpy as np
-import gymnasium as gym
-from gymnasium import spaces
 from stable_baselines3 import PPO
-from stable_baselines3.common.policies import ActorCriticCnnPolicy
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 # robomimic imports
@@ -27,45 +24,6 @@ TASK_ENVS = {
     "stack": StackEnv,
 }
 
-class RobomimicPPOWrapper:
-    """
-    Wraps an SB3 PPO policy to mimic the interface of a Robomimic agent.
-    """
-    def __init__(self, policy):
-        self.policy = policy
-
-    def start_episode(self):
-        pass
-
-    def set_eval(self):
-        self.policy.set_training_mode(False)
-
-    def set_train(self):
-        self.policy.set_training_mode(True)
-
-    def get_action(self, obs_dict):
-        # Extract image from robomimic observation dict
-        if isinstance(obs_dict, dict) and 'agentview_image' in obs_dict:
-            img = obs_dict['agentview_image']
-            # Ensure (C, H, W)
-            if img.ndim == 3 and img.shape[-1] == 3: # (H, W, C)
-                img = img.transpose(2, 0, 1)
-            # Ensure uint8
-            if img.dtype != np.uint8:
-                img = img.astype(np.uint8)
-            
-            action, _ = self.policy.predict(img, deterministic=True)
-            return action
-        
-        # Fallback if obs is already correct format
-        action, _ = self.policy.predict(obs_dict, deterministic=True)
-        return action
-
-    def __call__(self, ob, goal=None):
-        return self.get_action(ob)
-    
-    def state_dict(self):
-        return self.policy.state_dict()
 
 def main(args):
     # Prepare directories
@@ -91,71 +49,7 @@ def main(args):
     # Load the policy checkpoint
     ckpt_path = args.agent_path
     device = TorchUtils.get_torch_device(try_to_use_cuda=True)
-    
-    # Check if it is our custom SB3 PPO checkpoint
-    try:
-        ckpt_dict = torch.load(ckpt_path, map_location=device)
-    except Exception as e:
-        print(f"Error loading checkpoint: {e}")
-        ckpt_dict = {}
-
-    if isinstance(ckpt_dict, dict) and ckpt_dict.get("algo_name") == "SB3_PPO":
-        print("Detected SB3_PPO checkpoint. Loading custom policy...")
-        
-        # Hack: Temporarily set algo_name to 'bc' so robomimic can load the config/env
-        ckpt_dict["algo_name"] = "bc"
-
-        # Initialize ObsUtils so that the environment can properly process observations
-        import robomimic.utils.obs_utils as ObsUtils
-        config, _ = FileUtils.config_from_checkpoint(ckpt_dict=ckpt_dict)
-        
-        # Patch config to ensure agentview_image is in rgb modalities
-        # This is necessary because the dummy config created in train_ppo.py might not have it set
-        with config.values_unlocked():
-            config.observation.modalities.obs.rgb = ["agentview_image"]
-
-        ObsUtils.initialize_obs_utils_with_config(config)
-
-        # Create environment first to get action space
-        env, _ = FileUtils.env_from_checkpoint(
-            ckpt_dict=ckpt_dict, 
-            env_name=None,
-            render=args.render,
-            render_offscreen=True,
-            verbose=True
-        )
-        
-        # Define observation space expected by the CNN policy (3, 84, 84)
-        obs_space = spaces.Box(low=0, high=255, shape=(3, 84, 84), dtype=np.uint8)
-        
-        # Create action space manually since EnvRobosuite doesn't have it
-        # Robosuite actions are continuous and typically normalized [-1, 1]
-        action_dim = env.action_dimension
-        action_space = spaces.Box(low=-1.0, high=1.0, shape=(action_dim,), dtype=np.float32)
-
-        # Instantiate policy
-        policy_net = ActorCriticCnnPolicy(
-            observation_space=obs_space,
-            action_space=action_space,
-            lr_schedule=lambda _: 0.0
-        )
-        
-        policy_net.load_state_dict(ckpt_dict["model"])
-        policy_net.to(device)
-        
-        policy = RobomimicPPOWrapper(policy_net)
-        
-    else:
-        policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True)
-
-        # Create environment from the checkpoint
-        env, _ = FileUtils.env_from_checkpoint(
-            ckpt_dict=ckpt_dict, 
-            env_name=None,
-            render=args.render,
-            render_offscreen=True,  # Enable offscreen rendering for image collection
-            verbose=True
-        )
+    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True)
 
     # Determine horizon (if not specified, read from config)
     config, _ = FileUtils.config_from_checkpoint(ckpt_dict=ckpt_dict)
@@ -170,6 +64,15 @@ def main(args):
                 # Old format - remove it to use defaults
                 del ckpt_dict['env_metadata']['env_kwargs']['controller_configs']
                 print("[INFO] Removed incompatible old controller config, using defaults")
+
+    # Create environment from the checkpoint
+    env, _ = FileUtils.env_from_checkpoint(
+        ckpt_dict=ckpt_dict, 
+        env_name=None,
+        render=args.render,
+        render_offscreen=True,  # Enable offscreen rendering for image collection
+        verbose=True
+    )
 
     # Instantiate our custom environment
     env_class = TASK_ENVS.get(args.task_name)
@@ -191,24 +94,35 @@ def main(args):
     vec_env = DummyVecEnv([make_rl_env])
 
     # Create the PPO model
-    # Ensure batch_size divides n_steps to avoid warnings
-    # Default n_steps is 300. 60 is a good divisor close to default 64.
-    batch_size = 60
-    if args.rl_update_step % batch_size != 0:
-        batch_size = args.rl_update_step # Fallback to full batch if not divisible
+    ppo_model = PPO("CnnPolicy", vec_env, verbose=1, n_steps=args.rl_update_step)
+    
+    # Training phase (skip if loading from checkpoint)
+    if not args.load_model:
+        ppo_model.learn(total_timesteps=args.rl_timesteps)
 
-    ppo_model = PPO("CnnPolicy", vec_env, verbose=1, n_steps=args.rl_update_step, batch_size=batch_size)
-    ppo_model.learn(total_timesteps=args.rl_timesteps)
-
-    # Save the trained model
-    os.makedirs("trained_rl_models", exist_ok=True)
-    save_model_path = f"trained_rl_models/{args.save_path}_ppo_model_{args.rl_timesteps}"
-    ppo_model.save(save_model_path)
-    print(f"Training completed. Model saved to {save_model_path}")
+        # Save the trained model
+        os.makedirs("trained_rl_models", exist_ok=True)
+        save_model_path = f"trained_rl_models/{args.save_path}_ppo_model_{args.rl_timesteps}"
+        ppo_model.save(save_model_path)
+        print(f"Training completed. Model saved to {save_model_path}")
+    else:
+        # Load the pre-trained model
+        print(f"Loading model from {args.load_model}")
+        ppo_model = PPO.load(args.load_model, env=vec_env)
+        print(f"Model loaded successfully")
 
     # Example: get action log probabilities
     observation = vec_env.reset()
-    observation = torch.tensor(observation).float().to(ppo_model.device)
+    
+    # Fix shape: Convert to tensor and ensure channels-first format (B, C, H, W)
+    if isinstance(observation, np.ndarray):
+        # If observation is (B, H, W, C), transpose to (B, C, H, W)
+        if observation.shape[-1] == 3 and len(observation.shape) == 4:
+            observation = np.transpose(observation, (0, 3, 1, 2))
+        observation = torch.tensor(observation).float().to(ppo_model.device)
+    else:
+        observation = torch.tensor(observation).float().to(ppo_model.device)
+    
     with torch.no_grad():
         dist = ppo_model.policy.get_distribution(observation)
     n_actions = vec_env.action_space.n
@@ -234,6 +148,7 @@ if __name__ == "__main__":
     parser.add_argument("--collect_data", action="store_true", help="If set, collect image data during rollouts.")
     parser.add_argument("--save_path", type=str, default="default_run", help="Folder name to save logs and data.")
     parser.add_argument("--save_logs", action="store_true", help="Save logs.")
+    parser.add_argument("--load_model", type=str, default=None, help="Path to a saved PPO model to load (skips training).")
 
     args = parser.parse_args()
     main(args)
