@@ -13,3 +13,4 @@ Robo-MD-RSS.github.io/lift_pipeline/PPO_latent_3000.zip
 Robo-MD-RSS.github.io/models/square_ph_low_dim_epoch_1850_succ_84.pth
 Robo-MD-RSS.github.io/trained_rl_models/default_run_ppo_model_300.zip
 policy/lift_ph_image_epoch_500_succ_100.pth
+adversary/checkpoints

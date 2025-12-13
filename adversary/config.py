@@ -18,7 +18,7 @@ class AdversaryConfig:
     # task / env
     task_name: str = "lift"
     max_modifications: int = 3
-    rollout_horizon: int = 200
+    rollout_horizon: int = 400
     terminate_on_success: bool = True
     render: bool = False
 

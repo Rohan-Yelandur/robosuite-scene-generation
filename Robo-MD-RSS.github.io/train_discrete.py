@@ -98,13 +98,13 @@ def main(args):
     
     # Training phase (skip if loading from checkpoint)
     if not args.load_model:
-        ppo_model.learn(total_timesteps=args.rl_timesteps)
+    ppo_model.learn(total_timesteps=args.rl_timesteps)
 
-        # Save the trained model
-        os.makedirs("trained_rl_models", exist_ok=True)
-        save_model_path = f"trained_rl_models/{args.save_path}_ppo_model_{args.rl_timesteps}"
-        ppo_model.save(save_model_path)
-        print(f"Training completed. Model saved to {save_model_path}")
+    # Save the trained model
+    os.makedirs("trained_rl_models", exist_ok=True)
+    save_model_path = f"trained_rl_models/{args.save_path}_ppo_model_{args.rl_timesteps}"
+    ppo_model.save(save_model_path)
+    print(f"Training completed. Model saved to {save_model_path}")
     else:
         # Load the pre-trained model
         print(f"Loading model from {args.load_model}")
@@ -121,7 +121,7 @@ def main(args):
             observation = np.transpose(observation, (0, 3, 1, 2))
         observation = torch.tensor(observation).float().to(ppo_model.device)
     else:
-        observation = torch.tensor(observation).float().to(ppo_model.device)
+    observation = torch.tensor(observation).float().to(ppo_model.device)
     
     with torch.no_grad():
         dist = ppo_model.policy.get_distribution(observation)

@@ -5,7 +5,15 @@ from typing import Callable, Dict, List, Optional
 import gym
 import numpy as np
 
-from configs.action_dicts import ACTION_DICTS
+# Make configs importable when running from repo root
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent / "Robo-MD-RSS.github.io"
+if REPO_ROOT.exists():
+    sys.path.append(str(REPO_ROOT))
+
+from configs.action_dicts import ACTION_DICTS  # noqa: E402
 
 
 def _apply_lift_action(root: ET.Element, action: int) -> None:
@@ -164,6 +172,9 @@ class AdversaryEnv(gym.Env):
         self.mod_count += 1
         repeated = action in self.history
         self.history.append(action)
+        action_desc = self.action_dict.get(action, "unknown")
+        print(f"[Adversary] Applied action {action}: {action_desc} with remaining budget {self.max_modifications - self.mod_count}")
+        print(f"[Adversary] Current history: {self.history}")
 
         base_state = self.base_env.get_state()
         # baseline rollout (no mods)
@@ -205,5 +216,6 @@ class AdversaryEnv(gym.Env):
             "outcome": outcome,
             "baseline": baseline_outcome,
             "action_history": list(self.history),
+            "action_desc": action_desc,
         }
 

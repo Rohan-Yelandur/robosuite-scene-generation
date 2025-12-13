@@ -1,6 +1,8 @@
 import argparse
 import os
 import random
+import sys
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -11,11 +13,17 @@ from torch.utils.tensorboard import SummaryWriter
 from robomimic.utils import file_utils as FileUtils
 from robomimic.utils import tensor_utils as TensorUtils
 from robomimic.algo.bc import BC_RNN_GMM
+from robomimic.algo.algo import RolloutPolicy
 
-from robomimic.adversary.config import AdversaryConfig
-from robomimic.adversary.adversary_env import AdversaryEnv
-from robomimic.adversary.adversary_policy import DiscreteActorCritic
-from configs.action_dicts import ACTION_DICTS
+from config import AdversaryConfig
+from adversary_env import AdversaryEnv
+from adversary_policy import DiscreteActorCritic
+
+# Ensure configs are importable when running from the repo root
+REPO_ROOT = Path(__file__).resolve().parent.parent / "Robo-MD-RSS.github.io"
+if REPO_ROOT.exists():
+    sys.path.append(str(REPO_ROOT))
+from configs.action_dicts import ACTION_DICTS  # noqa: E402
 
 
 def set_seed(seed: int):
@@ -100,8 +108,16 @@ def estimate_entropy(dist, n_samples: int = 10):
 
 
 class ProtagonistPPO:
-    def __init__(self, policy: BC_RNN_GMM, value_dim: int, cfg: AdversaryConfig, device: torch.device):
+    def __init__(
+        self,
+        policy: BC_RNN_GMM,
+        policy_wrapper: RolloutPolicy,
+        value_dim: int,
+        cfg: AdversaryConfig,
+        device: torch.device,
+    ):
         self.policy = policy
+        self.policy_wrapper = policy_wrapper
         self.device = device
         self.cfg = cfg
         self._rnn_state = None
@@ -115,8 +131,9 @@ class ProtagonistPPO:
         ]
         self.value_net = nn.Sequential(*layers).to(device)
 
+        policy_params = list(self.policy.nets.parameters())
         self.optim = torch.optim.Adam(
-            list(self.policy.parameters()) + list(self.value_net.parameters()),
+            policy_params + list(self.value_net.parameters()),
             lr=cfg.protagonist_lr,
         )
 
@@ -131,16 +148,29 @@ class ProtagonistPPO:
         else:
             h = rnn_state
         # take last layer hidden state and flatten
-        feat = h[-1].reshape(-1)
+        feat = h[-1].detach().cpu().reshape(-1).numpy()
         if low_dim_flat.size > 0:
             feat = np.concatenate([feat, low_dim_flat], axis=0)
         return feat
 
+    def _prepare_obs(self, obs: Dict[str, np.ndarray]):
+        """
+        Use robomimic's RolloutPolicy preprocessing to ensure image sizes / normalization
+        match the policy's expected encoder configuration.
+        """
+        # _prepare_observation adds batch dimension when batched_ob=False
+        return self.policy_wrapper._prepare_observation(obs, batched_ob=False)
+
+    def _prepare_obs_batch(self, obs_batch: List[Dict[str, np.ndarray]]):
+        processed = [self._prepare_obs(o) for o in obs_batch]
+        keys = processed[0].keys()
+        stacked = {}
+        for k in keys:
+            stacked[k] = torch.cat([p[k] for p in processed], dim=0)
+        return stacked
+
     def act(self, obs: Dict[str, np.ndarray]):
-        obs_t = {k: torch.as_tensor(v, device=self.device).float().unsqueeze(0) for k, v in obs.items()}
-        for k, v in obs_t.items():
-            if v.dtype == torch.uint8:
-                obs_t[k] = v.float() / 255.0
+        obs_t = self._prepare_obs(obs)
 
         dist, self._rnn_state = self.policy.nets["policy"].forward_train_step(
             obs_t, rnn_state=self._rnn_state
@@ -162,7 +192,7 @@ class ProtagonistPPO:
         )
 
     def evaluate(self, obs_batch: List[Dict[str, np.ndarray]], actions: np.ndarray):
-        obs_t = stack_obs(obs_batch, self.device)
+        obs_t = self._prepare_obs_batch(obs_batch)
         dist, _ = self.policy.nets["policy"].forward_train_step(obs_t, rnn_state=None)
         act_t = torch.as_tensor(actions, device=self.device, dtype=torch.float32)
         logp = dist.log_prob(act_t)
@@ -196,17 +226,52 @@ class AdversaryPPO:
         return logp, entropy, values
 
 
+def _save_checkpoint(path: str, protagonist, adversary, cfg):
+    # BC_RNN_GMM is an Algo, not an nn.Module; save its underlying networks.
+    policy_state = protagonist.policy.nets.state_dict() if hasattr(protagonist.policy, "nets") else protagonist.policy.state_dict()
+    torch.save(
+        {
+            "protagonist_policy": policy_state,
+            "protagonist_value": protagonist.value_net.state_dict(),
+            "adversary_model": adversary.model.state_dict(),
+            "cfg": cfg.__dict__,
+        },
+        path,
+    )
+
+
 def train(cfg: AdversaryConfig):
     cfg.ensure_dirs()
     set_seed(cfg.seed)
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
 
-    policy, ckpt_dict = FileUtils.policy_from_checkpoint(
+    policy_wrapped, ckpt_dict = FileUtils.policy_from_checkpoint(
         ckpt_path=cfg.ckpt_path,
         device=device,
         verbose=True,
     )
-    assert isinstance(policy, BC_RNN_GMM), "Expected BC_RNN_GMM policy from checkpoint."
+    # Keep RolloutPolicy for preprocessing (image sizing / normalization)
+    if isinstance(policy_wrapped, RolloutPolicy):
+        policy_wrapper = policy_wrapped
+        policy = policy_wrapped.policy
+    else:
+        policy = policy_wrapped
+        policy_wrapper = RolloutPolicy(policy)
+
+    # Ensure policy is in training mode (file_utils sets eval by default)
+    policy.set_train()
+    if not isinstance(policy, BC_RNN_GMM):
+        print(f"[WARN] Loaded policy type {type(policy)} is not BC_RNN_GMM; proceeding assuming compatible interface.")
+
+    # Fix old controller configs that are incompatible with newer robosuite
+    if "env_metadata" in ckpt_dict and "env_kwargs" in ckpt_dict["env_metadata"]:
+        env_kwargs = ckpt_dict["env_metadata"]["env_kwargs"]
+        if "controller_configs" in env_kwargs:
+            ctrl = env_kwargs["controller_configs"]
+            if isinstance(ctrl, dict) and "type" in ctrl and "body_parts" not in ctrl:
+                # Old format - remove it to use defaults
+                del ckpt_dict["env_metadata"]["env_kwargs"]["controller_configs"]
+                print("[INFO] Removed incompatible old controller config, using defaults")
 
     env, _ = FileUtils.env_from_checkpoint(
         ckpt_dict=ckpt_dict,
@@ -222,11 +287,20 @@ def train(cfg: AdversaryConfig):
 
     protagonist_buffer = PPOBuffer()
     adversary_buffer = PPOBuffer()
+    epoch_pro_returns = []
+    epoch_pro_success = []
+    epoch_pro_lens = []
+    epoch_adv_returns = []
+    epoch_adv_lens = []
+    epoch_baseline_returns = []
+    epoch_mod_returns = []
+    epoch_mod_success = []
 
     init_obs = env.reset()
     low_dim_feat = flatten_low_dim(init_obs)
-    value_dim = (policy.algo_config.rnn.hidden_dim if cfg.use_rnn_hidden_for_value else 0) + low_dim_feat.shape[0]
-    protagonist = ProtagonistPPO(policy, max(1, value_dim), cfg, device)
+    rnn_hidden = getattr(policy.algo_config.rnn, "hidden_dim", 0) if cfg.use_rnn_hidden_for_value else 0
+    value_dim = max(1, rnn_hidden + low_dim_feat.shape[0])
+    protagonist = ProtagonistPPO(policy, policy_wrapper, value_dim, cfg, device)
     adversary = AdversaryPPO(
         obs_dim=4 + len(action_dict) * cfg.adversary_history_len,
         action_dim=len(action_dict),
@@ -237,6 +311,7 @@ def train(cfg: AdversaryConfig):
     writer = SummaryWriter(log_dir=cfg.log_dir)
 
     protagonist_updates = 0
+    best_return_mean = float("-inf")
 
     def protagonist_rollout_fn(env_instance, start_state=None, collect=True):
         if start_state is not None:
@@ -265,6 +340,10 @@ def train(cfg: AdversaryConfig):
             obs = next_obs
             if done or (success and cfg.terminate_on_success):
                 break
+        if collect:
+            epoch_pro_returns.append(total_reward)
+            epoch_pro_success.append(success)
+            epoch_pro_lens.append(step_i + 1)
         return {"success": success, "return": total_reward, "steps": step_i + 1}
 
     reward_weights = dict(
@@ -293,18 +372,29 @@ def train(cfg: AdversaryConfig):
                 g["lr"] = cfg.protagonist_lr * scale
 
     for epoch in range(cfg.total_epochs):
+        # reset per-epoch trackers
+        epoch_pro_returns.clear()
+        epoch_pro_success.clear()
+        epoch_pro_lens.clear()
+        epoch_adv_returns.clear()
+        epoch_adv_lens.clear()
+        epoch_baseline_returns.clear()
+        epoch_mod_returns.clear()
+        epoch_mod_success.clear()
         maybe_warmup_lr(epoch)
         adversary_buffer.clear()
         protagonist_buffer.clear()
 
         # optional encoder freeze
         freeze_enc = cfg.freeze_visual_epochs > 0 and epoch < cfg.freeze_visual_epochs
-        for p in policy.nets["policy"].encoder.parameters():
+        for p in policy.nets["policy"].nets["encoder"].parameters():
             p.requires_grad = not freeze_enc
 
         for _ in range(cfg.chunk_episodes):
             obs_adv = adversary_env.reset()
             done = False
+            episode_reward = 0.0
+            episode_len = 0
             while not done:
                 a_act, a_logp, a_val, a_ent = adversary.act(obs_adv)
                 next_obs, a_reward, done, info = adversary_env.step(a_act)
@@ -318,7 +408,16 @@ def train(cfg: AdversaryConfig):
                     value=a_val,
                     value_feat=None,
                 )
+                episode_reward += a_reward
+                episode_len += 1
+                # track protagonist outcomes for this adversary choice
+                if info and "outcome" in info and "baseline" in info:
+                    epoch_mod_returns.append(float(info["outcome"].get("return", 0.0)))
+                    epoch_mod_success.append(float(info["outcome"].get("success", 0.0)))
+                    epoch_baseline_returns.append(float(info["baseline"].get("return", 0.0)))
                 obs_adv = next_obs
+            epoch_adv_returns.append(episode_reward)
+            epoch_adv_lens.append(episode_len)
 
         # protagonist PPO update (minibatch)
         adv_pg, ret_pg = protagonist_buffer.compute_advantages()
@@ -331,6 +430,11 @@ def train(cfg: AdversaryConfig):
         value_feats = np.stack(protagonist_buffer.value_feats, axis=0)
 
         indices = np.random.permutation(len(obs_batch))
+        proto_policy_loss_sum = 0.0
+        proto_value_loss_sum = 0.0
+        proto_entropy_sum = 0.0
+        proto_kl_sum = 0.0
+        proto_batches = 0
         for _ in range(cfg.protagonist_epochs):
             for start in range(0, len(indices), cfg.protagonist_batch_size):
                 mb_idx = indices[start : start + cfg.protagonist_batch_size]
@@ -350,18 +454,29 @@ def train(cfg: AdversaryConfig):
                 value_loss = (mb_ret - values).pow(2).mean()
                 entropy_loss = -entropy.mean()
                 loss = policy_loss + cfg.protagonist_value_coef * value_loss + cfg.protagonist_ent_coef * entropy_loss
+                approx_kl = (mb_logp_old - logp_new).mean()
 
                 protagonist.optim.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(
-                    list(protagonist.policy.parameters()) + list(protagonist.value_net.parameters()),
+                    list(protagonist.policy.nets.parameters()) + list(protagonist.value_net.parameters()),
                     cfg.protagonist_max_grad_norm,
                 )
                 protagonist.optim.step()
+                proto_policy_loss_sum += policy_loss.item()
+                proto_value_loss_sum += value_loss.item()
+                proto_entropy_sum += entropy.mean().item()
+                proto_kl_sum += approx_kl.item()
+                proto_batches += 1
 
         protagonist_updates += 1
 
         # adversary PPO update (minibatch) every N protagonist updates
+        adv_policy_loss_sum = 0.0
+        adv_value_loss_sum = 0.0
+        adv_entropy_sum = 0.0
+        adv_kl_sum = 0.0
+        adv_batches = 0
         if protagonist_updates % cfg.adversary_update_ratio == 0:
             adv_adv, adv_ret = adversary_buffer.compute_advantages()
             obs_adv_batch = np.stack(adversary_buffer.obs, axis=0)
@@ -389,36 +504,87 @@ def train(cfg: AdversaryConfig):
                     value_loss = (mb_ret - values).pow(2).mean()
                     entropy_loss = -entropy.mean()
                     loss = policy_loss + cfg.adversary_value_coef * value_loss + cfg.adversary_ent_coef * entropy_loss
+                    approx_kl = (mb_logp_old - logp_new).mean()
 
                     adversary.optim.zero_grad()
                     loss.backward()
                     nn.utils.clip_grad_norm_(adversary.model.parameters(), cfg.adversary_max_grad_norm)
                     adversary.optim.step()
+                    adv_policy_loss_sum += policy_loss.item()
+                    adv_value_loss_sum += value_loss.item()
+                    adv_entropy_sum += entropy.mean().item()
+                    adv_kl_sum += approx_kl.item()
+                    adv_batches += 1
 
-        writer.add_scalar("protagonist/return_mean", np.mean(protagonist_buffer.rewards), epoch)
-        writer.add_scalar("adversary/reward_mean", np.mean(adversary_buffer.rewards), epoch)
+        # Logging
+        pro_step_count = len(protagonist_buffer.rewards)
+        adv_step_count = len(adversary_buffer.rewards)
+        pro_ep_return_mean = float(np.mean(epoch_pro_returns)) if epoch_pro_returns else 0.0
+        pro_success_rate = float(np.mean(epoch_pro_success)) if epoch_pro_success else 0.0
+        pro_ep_len_mean = float(np.mean(epoch_pro_lens)) if epoch_pro_lens else 0.0
+        pro_entropy_mean = proto_entropy_sum / max(1, proto_batches)
+        pro_kl_mean = proto_kl_sum / max(1, proto_batches)
+        pro_policy_loss_mean = proto_policy_loss_sum / max(1, proto_batches)
+        pro_value_loss_mean = proto_value_loss_sum / max(1, proto_batches)
+        pro_return_baseline_mean = float(np.mean(epoch_baseline_returns)) if epoch_baseline_returns else 0.0
+        pro_return_mod_mean = float(np.mean(epoch_mod_returns)) if epoch_mod_returns else 0.0
+        pro_success_mod_rate = float(np.mean(epoch_mod_success)) if epoch_mod_success else 0.0
 
-        torch.save(
-            {
-                "protagonist_policy": protagonist.policy.state_dict(),
-                "protagonist_value": protagonist.value_net.state_dict(),
-                "adversary_model": adversary.model.state_dict(),
-                "cfg": cfg.__dict__,
-            },
-            os.path.join(cfg.ckpt_dir, f"epoch_{epoch}.pt"),
-        )
+        adv_ep_return_mean = float(np.mean(epoch_adv_returns)) if epoch_adv_returns else 0.0
+        adv_ep_len_mean = float(np.mean(epoch_adv_lens)) if epoch_adv_lens else 0.0
+        adv_entropy_mean = adv_entropy_sum / max(1, adv_batches)
+        adv_kl_mean = adv_kl_sum / max(1, adv_batches)
+        adv_policy_loss_mean = adv_policy_loss_sum / max(1, adv_batches)
+        adv_value_loss_mean = adv_value_loss_sum / max(1, adv_batches)
+
+        writer.add_scalar("protagonist/episode_return_mean", pro_ep_return_mean, epoch)
+        writer.add_scalar("protagonist/step_reward_mean", float(np.mean(protagonist_buffer.rewards)) if protagonist_buffer.rewards else 0.0, epoch)
+        writer.add_scalar("protagonist/success_rate", pro_success_rate, epoch)
+        writer.add_scalar("protagonist/episode_length_mean", pro_ep_len_mean, epoch)
+        writer.add_scalar("protagonist/policy_loss", pro_policy_loss_mean, epoch)
+        writer.add_scalar("protagonist/value_loss", pro_value_loss_mean, epoch)
+        writer.add_scalar("protagonist/entropy_mean", pro_entropy_mean, epoch)
+        writer.add_scalar("protagonist/approx_kl", pro_kl_mean, epoch)
+        writer.add_scalar("protagonist/baseline_return_mean", pro_return_baseline_mean, epoch)
+        writer.add_scalar("protagonist/modified_return_mean", pro_return_mod_mean, epoch)
+        writer.add_scalar("protagonist/modified_success_rate", pro_success_mod_rate, epoch)
+        writer.add_scalar("protagonist/steps", pro_step_count, epoch)
+        writer.add_scalar("protagonist/lr", protagonist.optim.param_groups[0]["lr"], epoch)
+
+        writer.add_scalar("adversary/episode_return_mean", adv_ep_return_mean, epoch)
+        writer.add_scalar("adversary/step_reward_mean", float(np.mean(adversary_buffer.rewards)) if adversary_buffer.rewards else 0.0, epoch)
+        writer.add_scalar("adversary/episode_length_mean", adv_ep_len_mean, epoch)
+        writer.add_scalar("adversary/policy_loss", adv_policy_loss_mean, epoch)
+        writer.add_scalar("adversary/value_loss", adv_value_loss_mean, epoch)
+        writer.add_scalar("adversary/entropy_mean", adv_entropy_mean, epoch)
+        writer.add_scalar("adversary/approx_kl", adv_kl_mean, epoch)
+        writer.add_scalar("adversary/steps", adv_step_count, epoch)
+
+        # Save epoch checkpoint
+        epoch_path = os.path.join(cfg.ckpt_dir, f"epoch_{epoch}.pt")
+        _save_checkpoint(epoch_path, protagonist, adversary, cfg)
+
+        # Track and save the best-performing checkpoint (by return mean)
+        if pro_ep_return_mean > best_return_mean:
+            best_return_mean = pro_ep_return_mean
+            best_path = os.path.join(cfg.ckpt_dir, "best.pt")
+            _save_checkpoint(best_path, protagonist, adversary, cfg)
 
     writer.close()
+
+    # Save final checkpoint
+    final_path = os.path.join(cfg.ckpt_dir, "final.pt")
+    _save_checkpoint(final_path, protagonist, adversary, cfg)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Adversarial finetuning for BC-RNN-GMM with PPO.")
     parser.add_argument("--ckpt_path", type=str, required=True, help="Path to BC-RNN-GMM checkpoint.")
     parser.add_argument("--task_name", type=str, default="lift", help="robosuite task (lift by default).")
-    parser.add_argument("--total_epochs", type=int, default=50)
+    parser.add_argument("--total_epochs", type=int, default=10)
     parser.add_argument("--chunk_episodes", type=int, default=20)
-    parser.add_argument("--log_dir", type=str, default="robomimic/adversary/runs")
-    parser.add_argument("--ckpt_dir", type=str, default="robomimic/adversary/checkpoints")
+    parser.add_argument("--log_dir", type=str, default="adversary/runs")
+    parser.add_argument("--ckpt_dir", type=str, default="adversary/checkpoints")
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()
 

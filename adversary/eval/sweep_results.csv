@@ -1,0 +1,22 @@
+action_id,description,success_rate,avg_return
+0,Change the cube color to red,0.9629629629629629,0.9629629629629629
+1,Change the cube color to green,0.8518518518518519,0.8518518518518519
+2,Change the cube color to blue,0.8148148148148148,0.8148148148148148
+3,Change the cubr color to gray,0.7407407407407407,0.7407407407407407
+4,Change the table color to green,0.7777777777777778,0.7777777777777778
+5,Change the table color to blue,0.9259259259259259,0.9259259259259259
+6,Change the table color to red,0.7407407407407407,0.7407407407407407
+7,Change the table color to gray,0.8148148148148148,0.8148148148148148
+8,"Resize the table to dimensions 0.8 0.2 0.025 (Length, Breadth, Height).",0.7037037037037037,0.7037037037037037
+9,"Resize the table to dimensions 0.2 0.8 0.025 (Length, Breadth, Height).",0.8518518518518519,0.8518518518518519
+10,"Resize the cube to dimensions 0.04 0.04 0.04 (Length, Breadth, Height).",0.8148148148148148,0.8148148148148148
+11,"Resize the cube to dimensions 0.01 0.01 0.01 (Length, Breadth, Height).",0.9629629629629629,0.9629629629629629
+12,"Resize the cube to dimensions 0.04 0.01 0.01 (Length, Breadth, Height).",0.7777777777777778,0.7777777777777778
+13,Change the robot color to red.,0.8148148148148148,0.8148148148148148
+14,Change the robot color to green.,0.7777777777777778,0.7777777777777778
+15,Change the robot color to cyan.,0.7777777777777778,0.7777777777777778
+16,Change the robot color to gray.,0.8518518518518519,0.8518518518518519
+17,Change the lighting color to red.,0.8518518518518519,0.8518518518518519
+18,Change the lighting color to green.,0.8518518518518519,0.8518518518518519
+19,Change the lighting color to blue.,0.8888888888888888,0.8888888888888888
+20,Change the lighting color to gray.,0.8888888888888888,0.8888888888888888
