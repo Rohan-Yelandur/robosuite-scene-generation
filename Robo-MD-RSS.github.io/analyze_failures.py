@@ -372,7 +372,7 @@ def create_radar_chart(analysis_results, output_file):
     
     # Draw axis lines for each angle and label
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories[:-1], size=10)
+    ax.set_xticklabels(categories[:-1], size=16)
     
     # Set y-axis limits
     ax.set_ylim(0, max(values) * 1.1)
@@ -389,7 +389,7 @@ def create_radar_chart(analysis_results, output_file):
     for angle, value, category in zip(angles[:-1], values[:-1], categories[:-1]):
         if value > threshold:
             ax.text(angle, value + max(values) * 0.05, f'{value:.1f}%', 
-                   ha='center', va='center', size=9, weight='bold')
+                   ha='center', va='center', size=12, weight='bold')
     
     # Save figure
     plt.tight_layout()

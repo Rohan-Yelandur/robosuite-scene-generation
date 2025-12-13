@@ -45,7 +45,7 @@ ACTION_DICTS = {
         0:  "Change the cube color to red",
         1:  "Change the cube color to green",
         2:  "Change the cube color to blue",
-        3:  "Change the cubr color to gray",
+        3:  "Change the cube color to gray",
         4:  "Change the table color to green",
         5:  "Change the table color to blue",
         6:  "Change the table color to red",

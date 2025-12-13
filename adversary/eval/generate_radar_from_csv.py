@@ -54,26 +54,26 @@ def create_short_label(description: str, action_id: int) -> str:
     desc_lower = description.lower()
 
     if "cylinder color to" in desc_lower:
-        return f"Cyl color {_extract_color(description)}"
+        return f"Cyl {_extract_color(description)}"
     if "cube color to" in desc_lower:
-        return f"Cube color {_extract_color(description)}"
+        return f"Cube {_extract_color(description)}"
     if "can color to" in desc_lower:
-        return f"Can color {_extract_color(description)}"
+        return f"Can {_extract_color(description)}"
     if "table color to" in desc_lower:
-        return f"Table color {_extract_color(description)}"
+        return f"Table {_extract_color(description)}"
     if "robot color to" in desc_lower:
-        return f"Robot color {_extract_color(description)}"
+        return f"Robot {_extract_color(description)}"
     if "lighting color to" in desc_lower or "light color to" in desc_lower:
-        return f"Light color {_extract_color(description)}"
+        return f"Light {_extract_color(description)}"
 
     if "resize" in desc_lower and "cylinder" in desc_lower:
-        return f"Cyl size {action_id}"
+        return f"Cyl Size {action_id}"
     if "resize" in desc_lower and "cube" in desc_lower:
-        return f"Cube size {action_id}"
+        return f"Cube Size {action_id}"
     if "resize" in desc_lower and "table" in desc_lower:
-        return f"Table size {action_id}"
+        return f"Table Size {action_id}"
     if "resize" in desc_lower and "box" in desc_lower:
-        return f"Box size {action_id}"
+        return f"Box Size {action_id}"
     if "no perturbation" in desc_lower or "no change" in desc_lower:
         return "No change"
 
@@ -119,7 +119,7 @@ def create_radar_chart(entries: List[Dict], output_file: str, title: str):
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories[:-1], size=9)
+    ax.set_xticklabels(categories[:-1], size=11)
     ax.set_ylim(0, max(values) * 1.1 if values else 1.0)
     ax.set_yticklabels([])
     ax.grid(True, linestyle="--", alpha=0.7)
@@ -134,7 +134,7 @@ def create_radar_chart(entries: List[Dict], output_file: str, title: str):
                 f"{value:.1f}%",
                 ha="center",
                 va="center",
-                size=8,
+                size=12,
                 weight="bold",
             )
 

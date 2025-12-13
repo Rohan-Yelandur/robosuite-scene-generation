@@ -2,7 +2,7 @@ action_id,description,success_rate,avg_return
 0,Change the cube color to red,0.9629629629629629,0.9629629629629629
 1,Change the cube color to green,0.8518518518518519,0.8518518518518519
 2,Change the cube color to blue,0.8148148148148148,0.8148148148148148
-3,Change the cubr color to gray,0.7407407407407407,0.7407407407407407
+3,Change the cube color to gray,0.7407407407407407,0.7407407407407407
 4,Change the table color to green,0.7777777777777778,0.7777777777777778
 5,Change the table color to blue,0.9259259259259259,0.9259259259259259
 6,Change the table color to red,0.7407407407407407,0.7407407407407407
